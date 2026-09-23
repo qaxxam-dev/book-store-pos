@@ -70,6 +70,21 @@ class DistributorProvider with ChangeNotifier {
     await loadDistributors(); // Reload to update balance
   }
 
+  Future<void> updatePayment(
+      DistributorPayment payment, double oldAmount) async {
+    await _repository.updatePayment(payment, oldAmount);
+    await loadDistributors(); // Reload to update balance
+  }
+
+  Future<void> deletePayment(DistributorPayment payment) async {
+    await _repository.deletePayment(
+      payment.id!,
+      payment.distributorId,
+      payment.amount,
+    );
+    await loadDistributors(); // Reload to update balance
+  }
+
   Future<List<DistributorPayment>> getAllPayments() async {
     return await _repository.getAllPayments();
   }

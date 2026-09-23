@@ -89,6 +89,20 @@ class CustomerProvider with ChangeNotifier {
     await loadCustomers(); // Reload to update balance
   }
 
+  Future<void> updatePayment(CustomerPayment payment, double oldAmount) async {
+    await _customerRepository.updatePayment(payment, oldAmount);
+    await loadCustomers(); // Reload to update balance
+  }
+
+  Future<void> deletePayment(CustomerPayment payment) async {
+    await _customerRepository.deletePayment(
+      payment.id!,
+      payment.customerId,
+      payment.amount,
+    );
+    await loadCustomers(); // Reload to update balance
+  }
+
   Future<Customer?> getCustomerById(int id) async {
     if (_customers.isEmpty) {
       await loadCustomers();

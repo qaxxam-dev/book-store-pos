@@ -60,6 +60,46 @@ class DistributorRepository {
     });
   }
 
+  Future<void> updatePayment(DistributorPayment payment, double oldAmount) async {
+    final db = await _dbHelper.database;
+    await db.transaction((txn) async {
+      // 1. Update Payment Record
+      await txn.update(
+        'distributor_payments',
+        payment.toMap(),
+        where: 'id = ?',
+        whereArgs: [payment.id],
+      );
+
+      // 2. Adjust Distributor Balance by delta (oldAmount - newAmount)
+      final balanceDelta = oldAmount - payment.amount;
+      if (balanceDelta != 0) {
+        await txn.rawUpdate(
+          'UPDATE distributors SET balance = balance + ? WHERE id = ?',
+          [balanceDelta, payment.distributorId],
+        );
+      }
+    });
+  }
+
+  Future<void> deletePayment(int paymentId, int distributorId, double amount) async {
+    final db = await _dbHelper.database;
+    await db.transaction((txn) async {
+      // 1. Delete Payment Record
+      await txn.delete(
+        'distributor_payments',
+        where: 'id = ?',
+        whereArgs: [paymentId],
+      );
+
+      // 2. Revert Distributor Balance (Add payment amount back)
+      await txn.rawUpdate(
+        'UPDATE distributors SET balance = balance + ? WHERE id = ?',
+        [amount, distributorId],
+      );
+    });
+  }
+
   Future<List<DistributorPayment>> getPaymentsForDistributor(
     int distributorId,
   ) async {

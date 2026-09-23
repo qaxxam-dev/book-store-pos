@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme.dart';
 import '../../../data/models/distributor.dart';
@@ -10,8 +11,13 @@ import '../../../core/utils/dialog_utils.dart';
 
 class AddDistributorPaymentScreen extends StatefulWidget {
   final Distributor distributor;
+  final DistributorPayment? payment;
 
-  const AddDistributorPaymentScreen({super.key, required this.distributor});
+  const AddDistributorPaymentScreen({
+    super.key,
+    required this.distributor,
+    this.payment,
+  });
 
   @override
   State<AddDistributorPaymentScreen> createState() =>
@@ -21,16 +27,67 @@ class AddDistributorPaymentScreen extends StatefulWidget {
 class _AddDistributorPaymentScreenState
     extends State<AddDistributorPaymentScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _amountController = TextEditingController();
-  final _notesController = TextEditingController();
-  String _paymentMode = 'Cash';
+  late TextEditingController _amountController;
+  late TextEditingController _notesController;
+  late String _paymentMode;
+  late DateTime _selectedDate;
   bool _isProcessing = false;
+
+  bool get isEditing => widget.payment != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountController = TextEditingController(
+      text: widget.payment != null
+          ? widget.payment!.amount.toStringAsFixed(2)
+          : '',
+    );
+    _notesController = TextEditingController(
+      text: widget.payment?.notes ?? '',
+    );
+    _paymentMode = widget.payment?.paymentMode ?? 'Cash';
+    if (!['Cash', 'Card', 'UPI', 'Bank Transfer'].contains(_paymentMode)) {
+      _paymentMode = 'Cash';
+    }
+    _selectedDate = widget.payment != null
+        ? DateTime.tryParse(widget.payment!.paymentDate) ?? DateTime.now()
+        : DateTime.now();
+  }
 
   @override
   void dispose() {
     _amountController.dispose();
     _notesController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickDateTime() async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+
+    if (pickedDate != null && mounted) {
+      final pickedTime = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(_selectedDate),
+      );
+
+      if (pickedTime != null && mounted) {
+        setState(() {
+          _selectedDate = DateTime(
+            pickedDate.year,
+            pickedDate.month,
+            pickedDate.day,
+            pickedTime.hour,
+            pickedTime.minute,
+          );
+        });
+      }
+    }
   }
 
   Future<void> _savePayment() async {
@@ -40,21 +97,44 @@ class _AddDistributorPaymentScreenState
 
     try {
       final authProvider = context.read<AuthProvider>();
-      final payment = DistributorPayment(
-        distributorId: widget.distributor.id!,
-        amount: double.parse(_amountController.text),
-        paymentDate: DateTime.now().toIso8601String(),
-        paymentMode: _paymentMode,
-        notes: _notesController.text.trim(),
-      );
+      final amount = double.parse(_amountController.text.trim());
 
-      await context
-          .read<DistributorProvider>()
-          .addPayment(payment, isDemo: authProvider.isDemo);
+      if (isEditing) {
+        final updatedPayment = DistributorPayment(
+          id: widget.payment!.id,
+          distributorId: widget.payment!.distributorId,
+          amount: amount,
+          paymentDate: _selectedDate.toIso8601String(),
+          paymentMode: _paymentMode,
+          notes: _notesController.text.trim(),
+        );
 
-      if (mounted) {
-        Navigator.pop(context, true);
-        AppSnackBar.showSuccess(context, 'Payment recorded successfully');
+        await context.read<DistributorProvider>().updatePayment(
+              updatedPayment,
+              widget.payment!.amount,
+            );
+
+        if (mounted) {
+          Navigator.pop(context, true);
+          AppSnackBar.showSuccess(context, 'Payment updated successfully');
+        }
+      } else {
+        final payment = DistributorPayment(
+          distributorId: widget.distributor.id!,
+          amount: amount,
+          paymentDate: _selectedDate.toIso8601String(),
+          paymentMode: _paymentMode,
+          notes: _notesController.text.trim(),
+        );
+
+        await context
+            .read<DistributorProvider>()
+            .addPayment(payment, isDemo: authProvider.isDemo);
+
+        if (mounted) {
+          Navigator.pop(context, true);
+          AppSnackBar.showSuccess(context, 'Payment recorded successfully');
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -73,7 +153,9 @@ class _AddDistributorPaymentScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Add Payment - ${widget.distributor.name}'),
+        title: Text(isEditing
+            ? 'Edit Payment - ${widget.distributor.name}'
+            : 'Add Payment - ${widget.distributor.name}'),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -117,32 +199,68 @@ class _AddDistributorPaymentScreenState
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.currency_rupee),
                 ),
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
+                  if (value == null || value.trim().isEmpty) {
                     return 'Please enter amount';
                   }
-                  if (double.tryParse(value) == null) {
-                    return 'Please enter a valid number';
+                  final parsed = double.tryParse(value.trim());
+                  if (parsed == null || parsed <= 0) {
+                    return 'Please enter a valid amount greater than 0';
                   }
                   return null;
                 },
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: _paymentMode,
+                initialValue: _paymentMode,
                 decoration: const InputDecoration(
                   labelText: 'Payment Mode',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.payment),
                 ),
-                items: ['Cash', 'Card', 'UPI']
+                items: ['Cash', 'Card', 'UPI', 'Bank Transfer']
                     .map((mode) => DropdownMenuItem(
                           value: mode,
                           child: Text(mode),
                         ))
                     .toList(),
-                onChanged: (value) => setState(() => _paymentMode = value!),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _paymentMode = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              InkWell(
+                onTap: _pickDateTime,
+                borderRadius: BorderRadius.circular(4),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade400),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_today,
+                              size: 20, color: AppTheme.accent700),
+                          const SizedBox(width: 12),
+                          Text(
+                            DateFormat('dd MMM yyyy, hh:mm a')
+                                .format(_selectedDate),
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        ],
+                      ),
+                      const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -165,9 +283,9 @@ class _AddDistributorPaymentScreenState
                   ),
                   child: _isProcessing
                       ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          'SAVE PAYMENT',
-                          style: TextStyle(
+                      : Text(
+                          isEditing ? 'UPDATE PAYMENT' : 'SAVE PAYMENT',
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,

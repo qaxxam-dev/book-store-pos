@@ -70,6 +70,46 @@ class CustomerRepository {
     });
   }
 
+  Future<void> updatePayment(CustomerPayment payment, double oldAmount) async {
+    final db = await _dbHelper.database;
+    await db.transaction((txn) async {
+      // 1. Update Payment Record
+      await txn.update(
+        'customer_payments',
+        payment.toMap(),
+        where: 'id = ?',
+        whereArgs: [payment.id],
+      );
+
+      // 2. Adjust Customer Balance by delta (oldAmount - newAmount)
+      final balanceDelta = oldAmount - payment.amount;
+      if (balanceDelta != 0) {
+        await txn.rawUpdate(
+          'UPDATE customers SET balance = balance + ? WHERE id = ?',
+          [balanceDelta, payment.customerId],
+        );
+      }
+    });
+  }
+
+  Future<void> deletePayment(int paymentId, int customerId, double amount) async {
+    final db = await _dbHelper.database;
+    await db.transaction((txn) async {
+      // 1. Delete Payment Record
+      await txn.delete(
+        'customer_payments',
+        where: 'id = ?',
+        whereArgs: [paymentId],
+      );
+
+      // 2. Revert Customer Balance (Add payment amount back)
+      await txn.rawUpdate(
+        'UPDATE customers SET balance = balance + ? WHERE id = ?',
+        [amount, customerId],
+      );
+    });
+  }
+
   Future<List<CustomerPayment>> getPaymentsForCustomer(int customerId) async {
     final db = await _dbHelper.database;
     final List<Map<String, dynamic>> maps = await db.query(
