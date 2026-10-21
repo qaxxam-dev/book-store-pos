@@ -18,12 +18,18 @@ class CheckoutDialog extends StatefulWidget {
   final Customer? customer;
   final String? guestPhone;
   final Sale? editingSale;
+  final String? initialDiscountType;
+  final double? initialDiscountPercent;
+  final double? initialDiscountAmount;
 
   const CheckoutDialog({
     super.key,
     this.customer,
     this.guestPhone,
     this.editingSale,
+    this.initialDiscountType,
+    this.initialDiscountPercent,
+    this.initialDiscountAmount,
   });
 
   @override
@@ -35,6 +41,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   bool _isProcessing = false;
   final _discountController = TextEditingController();
   double _discountPercent = 0.0;
+  double _customDiscountAmount = 0.0;
   String _discountSelection = '0%';
   final FocusNode _customDiscountFocusNode = FocusNode();
   String? _customDiscountError;
@@ -60,40 +67,68 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   void initState() {
     super.initState();
     if (widget.editingSale != null) {
-      _paymentMethod = widget.editingSale!.paymentMethod;
-      _discountPercent = widget.editingSale!.discountPercent;
-      if (_discountPercent == 0.0) {
+      final sale = widget.editingSale!;
+      _paymentMethod = sale.paymentMethod;
+      if (sale.discountType == 'amount' ||
+          (sale.discountType == null && sale.discount > 0 && sale.discountPercent == 0)) {
+        _discountSelection = 'Custom ₹';
+        _customDiscountAmount = sale.discount;
+        _discountController.text =
+            _customDiscountAmount.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '');
+      } else if (sale.discountPercent == 0.0 && sale.discount == 0.0) {
         _discountSelection = '0%';
-      } else if (_discountPercent == 5.0) {
-        _discountSelection = '5%';
-      } else if (_discountPercent == 10.0) {
+        _discountPercent = 0.0;
+      } else if (sale.discountPercent == 10.0 &&
+          (sale.discountType == 'percent' || sale.discountType == null)) {
         _discountSelection = '10%';
-      } else if (_discountPercent == 15.0) {
-        _discountSelection = '15%';
-      } else if (_discountPercent == 20.0) {
-        _discountSelection = '20%';
+        _discountPercent = 10.0;
       } else {
-        _discountSelection = 'Custom';
-        _discountController.text = _discountPercent.toString();
+        _discountSelection = 'Custom %';
+        _discountPercent = sale.discountPercent;
+        _discountController.text =
+            _discountPercent.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '');
       }
-      if (widget.editingSale!.shippingAmount > 0) {
+      if (sale.shippingAmount > 0) {
         _isShippingEnabled = true;
-        _shippingAmount = widget.editingSale!.shippingAmount;
+        _shippingAmount = sale.shippingAmount;
         _shippingAmountController.text = _shippingAmount.toString();
         _shippingNameController.text =
-            widget.editingSale!.customerName ?? '';
+            sale.customerName ?? '';
         _shippingMobileController.text =
-            widget.editingSale!.customerMobile ?? '';
+            sale.customerMobile ?? '';
         _shippingAddressController.text =
-            widget.editingSale!.customerAddress ?? '';
+            sale.customerAddress ?? '';
       }
       if (_paymentMethod == 'Complementary') {
         _complementaryRecipientController.text =
-            widget.editingSale!.customerName ?? '';
+            sale.customerName ?? '';
         _complementaryRemarksController.text =
-            widget.editingSale!.customerAddress ?? '';
+            sale.customerAddress ?? '';
       }
     } else {
+      if (widget.initialDiscountType == 'amount' ||
+          (widget.initialDiscountType == null &&
+              (widget.initialDiscountAmount ?? 0) > 0 &&
+              (widget.initialDiscountPercent ?? 0) == 0)) {
+        _discountSelection = 'Custom ₹';
+        _customDiscountAmount = widget.initialDiscountAmount ?? 0.0;
+        _discountController.text = _customDiscountAmount > 0
+            ? _customDiscountAmount.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '')
+            : '';
+      } else if ((widget.initialDiscountPercent ?? 0.0) == 10.0 &&
+          (widget.initialDiscountType == 'percent' || widget.initialDiscountType == null)) {
+        _discountSelection = '10%';
+        _discountPercent = 10.0;
+      } else if ((widget.initialDiscountPercent ?? 0.0) > 0.0) {
+        _discountSelection = 'Custom %';
+        _discountPercent = widget.initialDiscountPercent!;
+        _discountController.text =
+            _discountPercent.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '');
+      } else {
+        _discountSelection = '0%';
+        _discountPercent = 0.0;
+      }
+
       if (widget.customer != null) {
         _shippingNameController.text = widget.customer!.name;
         _shippingMobileController.text = widget.customer!.phone;
@@ -118,16 +153,35 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
   }
 
   Future<void> _processSale() async {
+    final cartProvider = context.read<CartProvider>();
+    final subtotal =
+        cartProvider.items.fold(0.0, (sum, item) => sum + item.total);
     final isComplementary = _paymentMethod == 'Complementary';
 
-    if (!isComplementary &&
-        _discountSelection == 'Custom' &&
-        _customDiscountError != null) {
-      AppSnackBar.showError(
-        context,
-        'Please enter a valid custom discount percentage (0 - 100%).',
-      );
-      return;
+    if (!isComplementary) {
+      if (_discountSelection == 'Custom %' && _customDiscountError != null) {
+        AppSnackBar.showError(
+          context,
+          'Please enter a valid custom discount percentage (0 - 100%).',
+        );
+        return;
+      }
+      if (_discountSelection == 'Custom ₹') {
+        if (_customDiscountError != null) {
+          AppSnackBar.showError(
+            context,
+            _customDiscountError ?? 'Please enter a valid discount amount.',
+          );
+          return;
+        }
+        if (_customDiscountAmount > subtotal) {
+          AppSnackBar.showError(
+            context,
+            'Discount amount cannot exceed subtotal ₹${subtotal.toStringAsFixed(2)}.',
+          );
+          return;
+        }
+      }
     }
 
     if (_paymentMethod == 'Credit' && widget.customer == null) {
@@ -149,16 +203,38 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
 
     setState(() => _isProcessing = true);
     try {
-      final cartProvider = context.read<CartProvider>();
       final salesProvider = context.read<SalesProvider>();
 
-      // Calculate totals with local discount
-      final subtotal =
-          cartProvider.items.fold(0.0, (sum, item) => sum + item.total);
-      final double effectiveDiscountPercent =
-          isComplementary ? 100.0 : _discountPercent;
-      final double discountAmount =
-          isComplementary ? subtotal : subtotal * (_discountPercent / 100);
+      final String currentDiscountType = isComplementary
+          ? 'none'
+          : (_discountSelection == '0%'
+              ? 'none'
+              : (_discountSelection == '10%'
+                  ? 'percent'
+                  : (_discountSelection == 'Custom %'
+                      ? 'percent'
+                      : 'amount')));
+
+      double effectiveDiscountPercent = 0.0;
+      double discountAmount = 0.0;
+      if (isComplementary) {
+        effectiveDiscountPercent = 100.0;
+        discountAmount = subtotal;
+      } else if (_discountSelection == '0%') {
+        effectiveDiscountPercent = 0.0;
+        discountAmount = 0.0;
+      } else if (_discountSelection == '10%') {
+        effectiveDiscountPercent = 10.0;
+        discountAmount = subtotal * 0.10;
+      } else if (_discountSelection == 'Custom %') {
+        effectiveDiscountPercent = _discountPercent;
+        discountAmount = subtotal * (_discountPercent / 100);
+      } else if (_discountSelection == 'Custom ₹') {
+        discountAmount = _customDiscountAmount;
+        effectiveDiscountPercent =
+            subtotal > 0 ? (_customDiscountAmount / subtotal) * 100 : 0.0;
+      }
+
       final double finalTotal =
           isComplementary ? 0.0 : (subtotal - discountAmount + _shippingAmount);
 
@@ -202,6 +278,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           totalAmount: finalTotal,
           discount: discountAmount,
           discountPercent: effectiveDiscountPercent,
+          discountType: currentDiscountType,
           paymentMethod: _paymentMethod,
           timestamp: newTimestamp,
           shippingAmount: isComplementary ? 0.0 : _shippingAmount,
@@ -232,6 +309,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
         totalAmount: finalTotal,
         discount: discountAmount,
         discountPercent: effectiveDiscountPercent,
+        discountType: currentDiscountType,
         paymentMethod: _paymentMethod,
         timestamp: DateTime.now().toIso8601String(),
         billNumber:
@@ -298,8 +376,19 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
     final subtotal =
         cartProvider.items.fold(0.0, (sum, item) => sum + item.total);
     final isComplementary = _paymentMethod == 'Complementary';
-    final discountAmount =
-        isComplementary ? subtotal : (subtotal * (_discountPercent / 100));
+    double discountAmount = 0.0;
+    if (isComplementary) {
+      discountAmount = subtotal;
+    } else if (_discountSelection == '0%') {
+      discountAmount = 0.0;
+    } else if (_discountSelection == '10%') {
+      discountAmount = subtotal * 0.10;
+    } else if (_discountSelection == 'Custom %') {
+      discountAmount = subtotal * (_discountPercent / 100);
+    } else if (_discountSelection == 'Custom ₹') {
+      discountAmount = _customDiscountAmount;
+    }
+
     final totalAmount =
         isComplementary ? 0.0 : (subtotal - discountAmount + _shippingAmount);
 
@@ -365,15 +454,12 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                       DropdownMenuItem(
                           value: '0%', child: Text('No Discount (0%)')),
                       DropdownMenuItem(
-                          value: '5%', child: Text('5% Discount')),
-                      DropdownMenuItem(
                           value: '10%', child: Text('10% Discount')),
                       DropdownMenuItem(
-                          value: '15%', child: Text('15% Discount')),
+                          value: 'Custom %', child: Text('Custom Discount %')),
                       DropdownMenuItem(
-                          value: '20%', child: Text('20% Discount')),
-                      DropdownMenuItem(
-                          value: 'Custom', child: Text('Custom Discount...')),
+                          value: 'Custom ₹',
+                          child: Text('Custom Discount ₹ (Discount Amount)')),
                     ],
                     onChanged: (value) {
                       if (value == null) return;
@@ -382,26 +468,23 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                         _customDiscountError = null;
                         if (value == '0%') {
                           _discountPercent = 0.0;
-                          _discountController.clear();
-                        } else if (value == '5%') {
-                          _discountPercent = 5.0;
+                          _customDiscountAmount = 0.0;
                           _discountController.clear();
                         } else if (value == '10%') {
                           _discountPercent = 10.0;
+                          _customDiscountAmount = subtotal * 0.10;
                           _discountController.clear();
-                        } else if (value == '15%') {
-                          _discountPercent = 15.0;
+                        } else if (value == 'Custom %') {
                           _discountController.clear();
-                        } else if (value == '20%') {
-                          _discountPercent = 20.0;
+                          _discountPercent = 0.0;
+                          _customDiscountAmount = 0.0;
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            _customDiscountFocusNode.requestFocus();
+                          });
+                        } else if (value == 'Custom ₹') {
                           _discountController.clear();
-                        } else if (value == 'Custom') {
-                          final parsed =
-                              double.tryParse(_discountController.text);
-                          _discountPercent =
-                              (parsed != null && parsed >= 0 && parsed <= 100)
-                                  ? parsed
-                                  : 0.0;
+                          _discountPercent = 0.0;
+                          _customDiscountAmount = 0.0;
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             _customDiscountFocusNode.requestFocus();
                           });
@@ -411,7 +494,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                   ),
                 ),
               ),
-              if (_discountSelection == 'Custom') ...[
+              if (_discountSelection == 'Custom %') ...[
                 const SizedBox(height: 12),
                 TextField(
                   controller: _discountController,
@@ -441,6 +524,44 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                       } else {
                         _customDiscountError = null;
                         _discountPercent = parsed;
+                      }
+                    });
+                  },
+                ),
+              ] else if (_discountSelection == 'Custom ₹') ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _discountController,
+                  focusNode: _customDiscountFocusNode,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: 'Custom Discount (₹)',
+                    border: const OutlineInputBorder(),
+                    prefixText: '₹ ',
+                    prefixIcon: const Icon(Icons.currency_rupee, size: 20),
+                    errorText: _customDiscountError,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 14),
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      if (value.trim().isEmpty) {
+                        _customDiscountAmount = 0.0;
+                        _customDiscountError = null;
+                        return;
+                      }
+                      final parsed = double.tryParse(value);
+                      if (parsed == null || parsed < 0) {
+                        _customDiscountError = 'Enter a valid amount';
+                        _customDiscountAmount = 0.0;
+                      } else if (parsed > subtotal) {
+                        _customDiscountError =
+                            'Cannot exceed subtotal ₹${subtotal.toStringAsFixed(2)}';
+                        _customDiscountAmount = parsed;
+                      } else {
+                        _customDiscountError = null;
+                        _customDiscountAmount = parsed;
                       }
                     });
                   },

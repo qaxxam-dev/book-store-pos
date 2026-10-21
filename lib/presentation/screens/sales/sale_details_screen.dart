@@ -89,6 +89,18 @@ class _SaleDetailsScreenState extends State<SaleDetailsScreen> {
     }
   }
 
+  Future<void> _duplicateSale() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PosScreen(
+          duplicateSale: _sale,
+          duplicateItems: _items,
+        ),
+      ),
+    );
+  }
+
   Future<void> _loadItems() async {
     try {
       final items = await _salesRepository.getItemsForSale(_sale.id!);
@@ -257,7 +269,13 @@ class _SaleDetailsScreenState extends State<SaleDetailsScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),
+            tooltip: 'Edit Sale',
             onPressed: _editSale,
+          ),
+          IconButton(
+            icon: const Icon(Icons.copy),
+            tooltip: 'Duplicate Sale',
+            onPressed: _duplicateSale,
           ),
           IconButton(
             icon: const Icon(Icons.print),

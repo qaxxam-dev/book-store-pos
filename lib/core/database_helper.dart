@@ -20,7 +20,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 10,
+      version: 11,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
       onConfigure: _onConfigure,
@@ -93,6 +93,7 @@ class DatabaseHelper {
         customer_name $textNullableType,
         customer_mobile $textNullableType,
         customer_address $textNullableType,
+        discount_type $textNullableType,
         FOREIGN KEY (customer_id) REFERENCES customers (id) ON DELETE SET NULL
       )
     ''');
@@ -425,6 +426,14 @@ class DatabaseHelper {
       }
       try {
         await db.execute('ALTER TABLE sales ADD COLUMN customer_address TEXT');
+      } catch (e) {
+        // Column likely exists
+      }
+    }
+
+    if (oldVersion < 11) {
+      try {
+        await db.execute('ALTER TABLE sales ADD COLUMN discount_type TEXT');
       } catch (e) {
         // Column likely exists
       }

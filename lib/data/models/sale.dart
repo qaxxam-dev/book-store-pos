@@ -12,6 +12,7 @@ class Sale {
   final String? customerName;
   final String? customerMobile;
   final String? customerAddress;
+  final String? discountType;
 
   Sale({
     this.id,
@@ -27,6 +28,7 @@ class Sale {
     this.customerName,
     this.customerMobile,
     this.customerAddress,
+    this.discountType,
   });
 
   Map<String, dynamic> toMap() {
@@ -44,6 +46,7 @@ class Sale {
       'customer_name': customerName,
       'customer_mobile': customerMobile,
       'customer_address': customerAddress,
+      'discount_type': discountType,
     };
   }
 
@@ -62,6 +65,7 @@ class Sale {
       customerName: map['customer_name'],
       customerMobile: map['customer_mobile'],
       customerAddress: map['customer_address'],
+      discountType: map['discount_type'],
     );
   }
   Sale copyWith({
@@ -78,6 +82,7 @@ class Sale {
     String? customerName,
     String? customerMobile,
     String? customerAddress,
+    String? discountType,
   }) {
     return Sale(
       id: id ?? this.id,
@@ -93,6 +98,7 @@ class Sale {
       customerName: customerName ?? this.customerName,
       customerMobile: customerMobile ?? this.customerMobile,
       customerAddress: customerAddress ?? this.customerAddress,
+      discountType: discountType ?? this.discountType,
     );
   }
 }

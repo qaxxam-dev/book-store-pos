@@ -68,6 +68,7 @@ class SalesRepository {
         customerName: sale.customerName,
         customerMobile: sale.customerMobile,
         customerAddress: sale.customerAddress,
+        discountType: sale.discountType,
       );
 
       int saleId = await txn.insert('sales', saleWithNewBillNumber.toMap());

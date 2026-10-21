@@ -26,11 +26,15 @@ import '../../providers/auth_provider.dart';
 class PurchaseEntryScreen extends StatefulWidget {
   final Purchase? editingPurchase;
   final List<PurchaseItem>? editingItems;
+  final Purchase? duplicatePurchase;
+  final List<PurchaseItem>? duplicateItems;
 
   const PurchaseEntryScreen({
     super.key,
     this.editingPurchase,
     this.editingItems,
+    this.duplicatePurchase,
+    this.duplicateItems,
   });
 
   @override
@@ -82,6 +86,23 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
           _cartItems.addAll(widget.editingItems!);
         }
 
+        if (mounted) setState(() {});
+      } else if (widget.duplicatePurchase != null) {
+        // Pre-fill discount
+        if (widget.duplicatePurchase!.discount > 0) {
+          _totalDiscountController.text =
+              widget.duplicatePurchase!.discount.toString();
+        }
+
+        // Reset payment method to Cash
+        _paymentMethod = 'Cash';
+
+        // Pre-fill items
+        if (widget.duplicateItems != null) {
+          _cartItems.addAll(widget.duplicateItems!);
+        }
+
+        // Distributor left empty for manual entry
         if (mounted) setState(() {});
       }
     });
@@ -424,10 +445,18 @@ class _PurchaseEntryScreenState extends State<PurchaseEntryScreen> {
       appBar: AppBar(
         title: Text(widget.editingPurchase != null
             ? 'Edit Purchase: ${widget.editingPurchase!.billNumber}'
-            : 'Purchase Entry'),
-        leading: widget.editingPurchase != null ? const BackButton() : null,
+            : (widget.duplicatePurchase != null
+                ? 'New Purchase (Copied)'
+                : 'Purchase Entry')),
+        leading: (widget.editingPurchase != null ||
+                widget.duplicatePurchase != null)
+            ? const BackButton()
+            : null,
       ),
-      drawer: widget.editingPurchase != null ? null : const AppDrawer(),
+      drawer: (widget.editingPurchase != null ||
+              widget.duplicatePurchase != null)
+          ? null
+          : const AppDrawer(),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(

@@ -88,6 +88,18 @@ class _PurchaseDetailsScreenState extends State<PurchaseDetailsScreen> {
     }
   }
 
+  Future<void> _duplicatePurchase() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PurchaseEntryScreen(
+          duplicatePurchase: _purchase,
+          duplicateItems: _items,
+        ),
+      ),
+    );
+  }
+
   Future<void> _loadItems() async {
     try {
       final items = await context
@@ -255,7 +267,13 @@ class _PurchaseDetailsScreenState extends State<PurchaseDetailsScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),
+            tooltip: 'Edit Purchase',
             onPressed: _editPurchase,
+          ),
+          IconButton(
+            icon: const Icon(Icons.copy),
+            tooltip: 'Duplicate Purchase',
+            onPressed: _duplicatePurchase,
           ),
           IconButton(
             icon: const Icon(Icons.print),

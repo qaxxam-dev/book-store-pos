@@ -23,11 +23,15 @@ import '../../../core/services/share_service.dart';
 class PosScreen extends StatefulWidget {
   final Sale? editingSale;
   final List<SaleItem>? editingItems;
+  final Sale? duplicateSale;
+  final List<SaleItem>? duplicateItems;
 
   const PosScreen({
     super.key,
     this.editingSale,
     this.editingItems,
+    this.duplicateSale,
+    this.duplicateItems,
   });
 
   @override
@@ -85,6 +89,22 @@ class _PosScreenState extends State<PosScreen> {
         } else if (widget.editingSale!.guestPhone != null) {
           _customerController.text = widget.editingSale!.guestPhone!;
         }
+      } else if (widget.duplicateSale != null) {
+        final cartProvider = context.read<CartProvider>();
+        cartProvider.clearCart();
+
+        // Populate items in cart
+        if (widget.duplicateItems != null) {
+          for (var item in widget.duplicateItems!) {
+            try {
+              final book =
+                  bookProvider.books.firstWhere((b) => b.id == item.bookId);
+              cartProvider.addToCart(book);
+              cartProvider.updateQuantity(book, item.quantity);
+            } catch (_) {}
+          }
+        }
+        // Customer and distributor fields left empty for manual entry
       }
     });
   }
@@ -178,6 +198,12 @@ class _PosScreenState extends State<PosScreen> {
                                     ? _customerController.text
                                     : null,
                                 editingSale: widget.editingSale,
+                                initialDiscountType:
+                                    widget.duplicateSale?.discountType,
+                                initialDiscountPercent:
+                                    widget.duplicateSale?.discountPercent,
+                                initialDiscountAmount:
+                                    widget.duplicateSale?.discount,
                               ),
                             );
 
@@ -422,8 +448,10 @@ class _PosScreenState extends State<PosScreen> {
       appBar: AppBar(
         title: Text(widget.editingSale != null
             ? 'Edit Sale: ${widget.editingSale!.billNumber}'
-            : 'POS'),
-        leading: widget.editingSale != null ? const BackButton() : null,
+            : (widget.duplicateSale != null ? 'New Sale (Copied)' : 'POS')),
+        leading: (widget.editingSale != null || widget.duplicateSale != null)
+            ? const BackButton()
+            : null,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -438,7 +466,9 @@ class _PosScreenState extends State<PosScreen> {
           ),
         ],
       ),
-      drawer: widget.editingSale != null ? null : const AppDrawer(),
+      drawer: (widget.editingSale != null || widget.duplicateSale != null)
+          ? null
+          : const AppDrawer(),
       body: Column(
         children: [
           // Top Section: Customer & Search
